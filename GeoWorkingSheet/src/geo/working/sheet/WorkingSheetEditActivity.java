@@ -7,12 +7,11 @@ import android.app.ActionBar;
 import android.app.Activity;
 import android.net.Uri;
 import android.os.Bundle;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
-import android.database.DataSetObserver;
-import android.graphics.drawable.Drawable;
+import android.content.res.Resources;
 import android.os.Build;
-import android.provider.MediaStore;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.NavUtils;
 import android.text.Editable;
@@ -24,16 +23,12 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.AdapterView.OnItemClickListener;
-import android.widget.AdapterView.OnItemSelectedListener;
 import android.widget.ArrayAdapter;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -48,8 +43,6 @@ public class WorkingSheetEditActivity extends FragmentActivity implements
 	private static final String DEBUG_TAG = "WorkingSheetEditActivity";
 	private ListView workingSheet;
 	private static final int SELECT_PICTURE = 1;
-	private ImageView img;
-	private String selectedImagePath;
 	private int selectedItemId;
 
 	@Override
@@ -80,15 +73,26 @@ public class WorkingSheetEditActivity extends FragmentActivity implements
 		Intent intent = getIntent();
 		String[] questionStrings = intent
 				.getStringArrayExtra(EntryActivity.EXTRA_MESSAGE);
-		ArrayList<Question> questions = new ArrayList<Question>();
+		mQuestions = new ArrayList<Question>();
+		Resources resources = getResources();
+		Uri defaultUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE
+				+ "://"
+				+ resources.getResourcePackageName(R.drawable.ic_launcher)
+				+ '/' + resources.getResourceTypeName(R.drawable.ic_launcher)
+				+ '/' + resources.getResourceEntryName(R.drawable.ic_launcher));
 		for (int i = 0; i < questionStrings.length; i++) {
 			Question q = new Question();
 			q.setQuestion(questionStrings[i]);
-			questions.add(q);
+			q.setTextAnswer("");
+			q.setImageAnswer(defaultUri);
+			mQuestions.add(q);
 		}
-		QuestionAdapter mAdapter = new QuestionAdapter(this, questions);
+		mAdapter = new QuestionAdapter(this, mQuestions);
 		workingSheet.setAdapter(mAdapter);
 	}
+
+	private QuestionAdapter mAdapter;
+	private ArrayList<Question> mQuestions;
 
 	/**
 	 * Backward-compatible version of {@link ActionBar#getThemedContext()} that
@@ -188,7 +192,7 @@ public class WorkingSheetEditActivity extends FragmentActivity implements
 	public class Question {
 		private String textAnswer = "";
 		private String question = "";
-		private Drawable imageAnswer = null;
+		private Uri imageAnswer = null;
 
 		public String getQuestion() {
 			return question;
@@ -206,16 +210,16 @@ public class WorkingSheetEditActivity extends FragmentActivity implements
 			this.textAnswer = textAnswer;
 		}
 
-		public Drawable getImageAnswer() {
+		public Uri getImageAnswer() {
 			return imageAnswer;
 		}
 
-		public void setImageAnswer(Drawable imageAnswer) {
+		public void setImageAnswer(Uri imageAnswer) {
 			this.imageAnswer = imageAnswer;
 		}
 	}
 
-	public static class ViewHolder {
+	public class ViewHolder {
 
 		public TextView textQuestionTitle;
 		public TextView textQuestion;
@@ -245,17 +249,15 @@ public class WorkingSheetEditActivity extends FragmentActivity implements
 
 				}
 				workingSheet.setSelection(selectedItemId);
-				img = (ImageView) workingSheet.getChildAt(selectedItemId)
-						.findViewById(R.id.image_answer);
-				img.setImageURI(selectedImageUri);
+				mQuestions.get(selectedItemId).setImageAnswer(selectedImageUri);
+				mAdapter.notifyDataSetChanged();
 			}
 		}
 	}
 
 	public class QuestionAdapter extends BaseAdapter {
 		private ArrayList<Question> questions = null;
-		private final Context context;
-		private int count = 0;
+		private Context context;
 
 		public QuestionAdapter(Context context, ArrayList<Question> questions) {
 			super();
@@ -298,8 +300,6 @@ public class WorkingSheetEditActivity extends FragmentActivity implements
 			}
 
 			if (questions.size() > 0) {
-				count++;
-				Log.i(DEBUG_TAG, "count = " + count + " position = " + position);
 
 				viewHolder.textAnswerTitle.setText("Answer");
 				viewHolder.textImageAnswerTitle.setText("Picture");
@@ -314,6 +314,8 @@ public class WorkingSheetEditActivity extends FragmentActivity implements
 						.getTextAnswer());
 				viewHolder.textAnswer
 						.addTextChangedListener(new EditTextWatcher(position));
+				viewHolder.imageAnswer.setImageURI(questions.get(position)
+						.getImageAnswer());
 			}
 
 			return convertView;
@@ -325,13 +327,13 @@ public class WorkingSheetEditActivity extends FragmentActivity implements
 		}
 
 		@Override
-		public Object getItem(int arg0) {
-			return questions.get(arg0).getTextAnswer();
+		public Object getItem(int position) {
+			return questions.get(position);
 		}
 
 		@Override
-		public long getItemId(int arg0) {
-			return arg0;
+		public long getItemId(int position) {
+			return position;
 		}
 
 		private class EditTextWatcher implements TextWatcher {
@@ -343,27 +345,17 @@ public class WorkingSheetEditActivity extends FragmentActivity implements
 
 			@Override
 			public void afterTextChanged(Editable s) {
-				// TODO Auto-generated method stub
 				questions.get(itemId).setTextAnswer(s.toString());
-				// Toast.makeText(mContext, "Q：" + listPosititon +
-				// " Ans："+ questions.get(listPosititon).getTextAnswer(),
-				// Toast.LENGTH_LONG).show();
-				Log.i(DEBUG_TAG, "Q：" + itemId + " Ans："
-						+ questions.get(itemId).getTextAnswer());
 			}
 
 			@Override
 			public void beforeTextChanged(CharSequence s, int start, int count,
 					int after) {
-				// TODO Auto-generated method stub
-
 			}
 
 			@Override
 			public void onTextChanged(CharSequence s, int start, int before,
 					int count) {
-				// TODO Auto-generated method stub
-
 			}
 
 		}
@@ -378,7 +370,6 @@ public class WorkingSheetEditActivity extends FragmentActivity implements
 			@Override
 			public void onClick(View v) {
 				selectedItemId = itemId;
-
 				Intent intent = new Intent();
 				intent.setAction(Intent.ACTION_GET_CONTENT);
 				intent.addCategory(Intent.CATEGORY_OPENABLE);
